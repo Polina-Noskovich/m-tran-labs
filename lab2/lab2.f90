@@ -1,16 +1,19 @@
 program lexical_analyzer
   implicit none
 
-  ! Ключевые слова: длина слова - 6 символов
-  character(len=6), dimension(10) :: keywords = (/ 'if    ', 'else  ', 'while ', 'return', &
-                                                  'int   ', 'float ', 'char  ', 'bool  ', &
-                                                  'void  ', 'for   ' /)
+  ! Ключевые слова PHP
+  character(len=10), dimension(12) :: keywords = (/ 'if      ', 'else    ', 'while   ', 'return  ', &
+                                                  'int     ', 'float   ', 'string  ', 'bool    ', &
+                                                  'function', 'class   ', 'echo    ', 'for     ' /)
 
-  ! Операторы
-  character(len=1), dimension(5) :: operators = (/ '=', '+', '*', '(', ')' /)
+  ! Операторы PHP (унифицированная длина 2 символа)
+  character(len=2), dimension(14) :: operators = (/ '= ', '==', '+ ', '- ', '* ', '/ ', '( ', ') ', '{ ', '} ', '; ', '< ', '> ', '? ' /)
+
+  ! Теги PHP
+  character(len=2), dimension(2) :: tags = (/ '<?', '?>' /)
 
   ! Исходная строка программы
-  character(len=100) :: line
+  character(len=200) :: line
   integer :: i, len_line, line_number, io_status
   character(len=1) :: ch
 
@@ -41,13 +44,21 @@ program lexical_analyzer
         ch = line(i:i)
 
         select case (ch)
-        case ('A':'Z', 'a':'z')
+        case ('A':'Z', 'a':'z', '$')
            call process_identifier(line, i, len_line, name_table, name_table_size, line_number, keywords)
         case ('0':'9')
            call process_constant(line, i, len_line, name_table, name_table_size, line_number)
-        case ('=', '+', '*', '(', ')')
-           write(*, '(A)', advance='no') '<OP_' // trim(ch) // '>'
-           i = i + 1
+        case ('=', '+', '-', '*', '/', '(', ')', '{', '}', ';', '<', '>', '?')
+            ! Обработка тегов
+            if (i < len_line .and. line(i:i+1) == '<?') then
+               write(*, '(A)', advance='no') '<TAG_<?>'
+               i = i + 2
+            else if (i < len_line .and. line(i:i+1) == '?>') then
+               write(*, '(A)', advance='no') '<TAG_?>'
+               i = i + 2
+            else
+               call process_operator(line, i, len_line, line_number, operators)
+            end if
         case (' ')
            i = i + 1
         case default
@@ -64,13 +75,13 @@ program lexical_analyzer
 contains
 
   subroutine process_identifier(line, i, len_line, name_table, name_table_size, line_number, keywords)
-    character(len=100), intent(in) :: line
+    character(len=200), intent(in) :: line
     integer, intent(inout) :: i
     integer, intent(in) :: len_line
     type(name_table_entry), dimension(100), intent(inout) :: name_table
     integer, intent(inout) :: name_table_size
     integer, intent(in) :: line_number
-    character(len=6), dimension(10), intent(in) :: keywords
+    character(len=10), dimension(10), intent(in) :: keywords
 
     character(len=20) :: identifier
     character(len=10) :: buffer
@@ -81,7 +92,8 @@ contains
 
     do while (i <= len_line .and. (line(i:i) >= 'A' .and. line(i:i) <= 'Z' .or. &
                                    line(i:i) >= 'a' .and. line(i:i) <= 'z' .or. &
-                                   line(i:i) >= '0' .and. line(i:i) <= '9'))
+                                   line(i:i) >= '0' .and. line(i:i) <= '9' .or. &
+                                   line(i:i) == '$'))
        j = j + 1
        identifier(j:j) = line(i:i)
        i = i + 1
@@ -116,7 +128,7 @@ contains
   end subroutine process_identifier
 
   subroutine process_constant(line, i, len_line, name_table, name_table_size, line_number)
-    character(len=100), intent(in) :: line
+    character(len=200), intent(in) :: line
     integer, intent(inout) :: i
     integer, intent(in) :: len_line
     type(name_table_entry), dimension(100), intent(inout) :: name_table
@@ -138,7 +150,6 @@ contains
 
     constant = trim(constant)
 
-    ! Добавление новой константы в таблицу
     name_table_size = name_table_size + 1
     name_table(name_table_size)%name = constant
     name_table(name_table_size)%info = 'Constant'
@@ -146,5 +157,66 @@ contains
     write(buffer, '(I0)') name_table_size
     write(*, '(A)', advance='no') '<CONST_' // trim(buffer) // '>'
   end subroutine process_constant
+
+subroutine process_operator(line, i, len_line, line_number, operators)
+  character(len=200), intent(in) :: line
+  integer, intent(inout) :: i
+  integer, intent(in) :: len_line
+  integer, intent(in) :: line_number
+  character(len=2), dimension(13), intent(in) :: operators
+
+    character(len=2) :: op
+    integer :: j
+
+    if (i < len_line .and. line(i:i+1) == '==') then
+       op = '=='
+       i = i + 1
+    else
+       op = line(i:i)
+    end if
+    i = i + 1
+
+    ! Проверка на допустимый оператор
+    do j = 1, size(operators)
+       if (op == trim(operators(j))) then
+          write(*, '(A)', advance='no') '<OP_' // trim(op) // '>'
+          return
+       end if
+    end do
+
+    write(*, '(A,I0,A)', advance='no') '[Error: invalid operator "' // trim(op) // '" at line ', line_number
+  end subroutine process_operator
+
+  subroutine process_tag(line, i, len_line, line_number, tags)
+    character(len=200), intent(in) :: line
+    integer, intent(inout) :: i
+    integer, intent(in) :: len_line
+    integer, intent(in) :: line_number
+    character(len=2), dimension(2), intent(in) :: tags
+
+    character(len=2) :: tag
+    integer :: j
+
+    if (i < len_line .and. line(i:i+1) == '<?') then
+       tag = '<?'
+       i = i + 2
+    else if (i < len_line .and. line(i:i+1) == '?>') then
+       tag = '?>'
+       i = i + 2
+    else
+       i = i + 1
+       return
+    end if
+
+    ! Проверка на допустимый тег
+    do j = 1, size(tags)
+       if (tag == trim(tags(j))) then
+          write(*, '(A)', advance='no') '<TAG_' // trim(tag) // '>'
+          return
+       end if
+    end do
+
+    write(*, '(A,I0,A)', advance='no') '[Error: invalid tag "' // trim(tag) // '" at line ', line_number
+  end subroutine process_tag
 
 end program lexical_analyzer

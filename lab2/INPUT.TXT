@@ -1,3 +1,8 @@
-if (x == 10) then
-   x = x + 1
-endif
+<?php
+int $x = 10;
+if ($x > 0) {
+    return $x + 1.2;
+} else {
+    return 0;
+}
+?>
