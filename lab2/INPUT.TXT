@@ -1,8 +1,46 @@
 <?php
-int $x = 10;
-if ($x > 0) {
-    return $x + 1.2;
+int $a = 5;
+float $b = 3.14;
+$stringVar = "Hello, PHP!";
+$flag = true;
+
+if ($a > 3) {
+    $result = $a + $b;
+    echo "Result is: "  $result;
 } else {
-    return 0;
+    $result = $a - $b;
+    echo "Different result: "  $result;
 }
+
+while ($a < 10) {
+    $a = $a + 1;
+    $stringVar = $stringVar  "!";
+} 
+
+for ($i = 0; $i < 3; $i++) {
+    $flag = $flag;
+    echo "Flag is: "  $flag;
+}
+
+function testFunction($param1, $param2) {
+    return $param1 * $param2;
+}
+
+$multResult = testFunction(5);
+echo "Multiplication result: "  $multResult;
+
+class MyClass {
+    public $myVar;
+
+    function construct($value) {
+        $this->myVar = $value;
+    }
+
+    function getVar() {
+        return $this->myVar;
+    }
+}
+
+$myObject = new MyClass(42);
+echo "Object value: "  $myObject->getVar();
 ?>
