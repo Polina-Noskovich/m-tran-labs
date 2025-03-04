@@ -1,0 +1,277 @@
+module token_module
+  implicit none
+
+  type :: token_info
+    character(len=256) :: value
+    character(len=20) :: type
+  end type token_info
+
+  type(token_info), allocatable :: tokens(:)
+  integer :: token_count = 0
+  integer :: pos = 1
+
+contains
+
+  subroutine add_token(value, type)
+    character(len=*), intent(in) :: value, type
+    type(token_info), allocatable :: temp(:)
+    type(token_info) :: new_token
+
+    new_token%value = trim(value)
+    new_token%type = trim(type)
+
+    if (.not. allocated(tokens)) then
+      allocate(tokens(1))
+      tokens(1) = new_token
+      token_count = 1
+    else
+      allocate(temp(token_count + 1))
+      temp(1:token_count) = tokens
+      temp(token_count + 1) = new_token
+      call move_alloc(temp, tokens)
+      token_count = token_count + 1
+    end if
+  end subroutine add_token
+
+  recursive subroutine print_node(prefix, is_last, name, value)
+    character(len=*), intent(in) :: prefix, name
+    character(len=*), optional, intent(in) :: value
+    logical, intent(in) :: is_last
+    character(len=256) :: new_prefix, line
+
+    if (present(value)) then
+      write(line, '(A, A, A, A, A)') trim(prefix), '+-- ', trim(name), ' (', trim(value)//')'
+    else
+      write(line, '(A, A, A)') trim(prefix), '+-- ', trim(name)
+    end if
+
+    print '(A)', trim(line)
+
+    if (.not. is_last) then
+      new_prefix = prefix // '|   '
+    else
+      new_prefix = prefix // '    '
+    end if
+  end subroutine print_node
+
+  subroutine parse_program()
+    character(len=256) :: prefix
+
+    print *, 'PROGRAM'
+    prefix = ''
+
+    if (pos > token_count) return
+
+    ! PHP_OPEN_TAG
+    call print_node(prefix, .false., 'PHP_OPEN_TAG', tokens(pos)%value)
+    pos = pos + 1
+
+    ! STATEMENT_LIST
+    call print_node(prefix, .false., 'STATEMENT_LIST')
+    call parse_statement_list(prefix // '|   ')
+
+    ! PHP_CLOSE_TAG
+    if (pos <= token_count .and. trim(tokens(pos)%type) == 'PHP_CLOSE_TAG') then
+      call print_node(prefix, .true., 'PHP_CLOSE_TAG', tokens(pos)%value)
+      pos = pos + 1
+    end if
+  end subroutine parse_program
+
+  subroutine parse_statement_list(prefix)
+    character(len=*), intent(in) :: prefix
+    logical :: is_last
+    integer :: initial_pos
+
+    do while (pos <= token_count .and. trim(tokens(pos)%type) /= 'PHP_CLOSE_TAG')
+      initial_pos = pos
+      is_last = .false.
+      if (pos < token_count) then
+        if (trim(tokens(pos+1)%type) == 'PHP_CLOSE_TAG') is_last = .true.
+      else
+        is_last = .true.
+      end if
+
+      if (trim(tokens(pos)%type) == 'ECHO') then
+        call parse_echo_statement(prefix, is_last)
+      else if (trim(tokens(pos)%type) == 'VARIABLE') then
+        call parse_assignment(prefix, is_last)
+      else
+        pos = pos + 1
+      end if
+    end do
+  end subroutine parse_statement_list
+
+  subroutine parse_echo_statement(prefix, is_last)
+    character(len=*), intent(in) :: prefix
+    logical, intent(in) :: is_last
+    character(len=256) :: new_prefix
+
+    call print_node(prefix, is_last, 'ECHO_STATEMENT')
+
+    if (is_last) then
+      new_prefix = prefix // '    '
+    else
+      new_prefix = prefix // '|   '
+    end if
+
+    ! ECHO
+    call print_node(new_prefix, .false., 'ECHO', tokens(pos)%value)
+    pos = pos + 1
+
+    ! STRING_LITERAL
+    call print_node(new_prefix, .true., 'STRING_LITERAL', tokens(pos)%value)
+    pos = pos + 1
+  end subroutine parse_echo_statement
+
+  subroutine parse_assignment(prefix, is_last)
+    character(len=*), intent(in) :: prefix
+    logical, intent(in) :: is_last
+    character(len=256) :: new_prefix
+
+    call print_node(prefix, is_last, 'ASSIGNMENT_STATEMENT')
+
+    if (is_last) then
+      new_prefix = prefix // '    '
+    else
+      new_prefix = prefix // '|   '
+    end if
+
+    ! VARIABLE
+    call print_node(new_prefix, .false., 'VARIABLE', tokens(pos)%value)
+    pos = pos + 1
+
+    ! OPERATOR
+    call print_node(new_prefix, .false., 'OPERATOR', tokens(pos)%value)
+    pos = pos + 1
+
+    ! EXPRESSION
+    call print_node(new_prefix, .true., 'EXPRESSION')
+    call parse_expression(new_prefix // '    ')
+  end subroutine parse_assignment
+
+  subroutine parse_expression(prefix)
+    character(len=*), intent(in) :: prefix
+    character(len=256) :: new_prefix
+
+    new_prefix = prefix // '|   '
+
+    ! NUMBER
+    call print_node(new_prefix, .false., 'NUMBER', tokens(pos)%value)
+    pos = pos + 1
+
+    ! OPERATOR
+    call print_node(new_prefix, .false., 'OPERATOR', tokens(pos)%value)
+    pos = pos + 1
+
+    ! NUMBER
+    call print_node(new_prefix, .true., 'NUMBER', tokens(pos)%value)
+    pos = pos + 1
+  end subroutine parse_expression
+
+end module token_module
+
+program php_parser
+  use token_module
+  implicit none
+  integer :: unit_number, end_of_file, i
+  character(len=256) :: line
+
+  open(newunit=unit_number, file='INPUT.TXT', status='old', action='read', iostat=end_of_file)
+  if (end_of_file /= 0) then
+    print *, 'Error: The file could not be opened INPUT.TXT'
+    stop
+  end if
+
+  do
+    read(unit_number, '(A)', iostat=end_of_file) line
+    if (end_of_file /= 0) exit
+    call tokenize_line(trim(line))
+  end do
+
+  close(unit_number)
+  call parse_program()
+  print *, 'The analysis is completed.'
+
+contains
+
+  subroutine tokenize_line(line)
+    character(len=*), intent(in) :: line
+    integer :: i, len_line, start_pos, quote_pos
+    character(len=256) :: token
+    character(len=20) :: token_type
+    logical :: in_string
+    character :: quote_char
+
+    len_line = len_trim(line)
+    i = 1
+    in_string = .false.
+    quote_char = ' '
+
+    do while (i <= len_line)
+      if (.not. in_string) then
+        if (line(i:i) == ' ') then
+          i = i + 1
+          cycle
+        end if
+
+        ! Check for PHP tags
+        if (i <= len_line-4 .and. line(i:i+4) == '<?php') then
+          call add_token('<?php', 'PHP_OPEN_TAG')
+          i = i + 5
+          cycle
+        else if (i <= len_line-1 .and. line(i:i+1) == '?>') then
+          call add_token('?>', 'PHP_CLOSE_TAG')
+          i = i + 2
+          cycle
+        end if
+
+        ! Check for string literals
+        if (line(i:i) == '"' .or. line(i:i) == "'") then
+          start_pos = i
+          quote_char = line(i:i)
+          i = i + 1
+          do while (i <= len_line .and. line(i:i) /= quote_char)
+            i = i + 1
+          end do
+          if (i > len_line) then
+            token = line(start_pos:len_line)
+          else
+            token = line(start_pos:i)
+            i = i + 1
+          end if
+          call add_token(trim(token), 'STRING_LITERAL')
+          cycle
+        end if
+
+        start_pos = i
+        do while (i <= len_line .and. line(i:i) /= ' ')
+          i = i + 1
+        end do
+        token = line(start_pos:i-1)
+      else
+        start_pos = i
+        do while (i <= len_line .and. line(i:i) /= quote_char)
+          i = i + 1
+        end do
+        token = line(start_pos:i-1)
+        i = i + 1
+        in_string = .false.
+      end if
+
+      if (token == 'echo') then
+        token_type = 'ECHO'
+      else if (token(1:1) == '$') then
+        token_type = 'VARIABLE'
+      else if (token == '=' .or. token == '+' .or. token == '-' .or. token == '*' .or. token == '/') then
+        token_type = 'OPERATOR'
+      else if (verify(trim(token), '0123456789') == 0) then
+        token_type = 'NUMBER'
+      else
+        token_type = 'UNKNOWN'
+      end if
+
+      call add_token(trim(token), trim(token_type))
+    end do
+  end subroutine tokenize_line
+
+end program php_parser

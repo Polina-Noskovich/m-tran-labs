@@ -1,0 +1,40 @@
+<?php
+echo "Hello, World!";
+$a = 5 + 3;
+
+if ($a > 5) {
+    echo "Greater than 5";
+} else {
+    echo "Less or equal to 5";
+}
+
+for ($i = 0; $i < 3; $i = $i + 1) {
+    echo "Loop iteration";
+}
+
+function testFunc($x) {
+    return $x * 2;
+}
+
+$b = testFunc($a);
+
+for ($i = 0; $i < 3; $i = $i + 1) {
+    echo "Loop1 iteration";
+}
+
+function testFunc1($x) {
+    return $x * 2;
+}
+
+$c = testFunc($a);
+
+for ($i = 0; $i < 3; $i = $i + 1) {
+    echo "Loop2 iteration";
+}
+
+function testFunc2($x) {
+    return $x * 2;
+}
+
+$d = testFunc($a);
+?>

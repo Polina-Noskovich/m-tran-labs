@@ -2,9 +2,9 @@ program lexical_analyzer
 implicit none
 
 ! Ключевые слова PHP
-character(len=10), dimension(12) :: keywords = (/ 'if      ', 'else    ', 'while   ', 'return  ', &
-                                                 'int     ', 'float   ', 'string  ', 'bool    ', &
-                                                 'function', 'class   ', 'echo    ', 'for     ' /)
+character(len=10), dimension(16) :: keywords = (/ 'if       ', 'else     ', 'while    ', 'return   ', 'int      ', 'float    ', &
+    'string   ', 'bool     ', 'function ', 'class    ', 'echo     ', 'for      ', &
+    'final    ', 'abstract ', 'public   ', 'private  ' /)
 
 ! Операторы PHP (унифицированная длина 2 символа)
 character(len=2), dimension(15) :: operators = (/ '= ', '==', '+ ', '- ', '* ', '/ ', '( ', ') ', '{ ', '} ', '; ', '< ', '> ', '? ', ', ' /)
@@ -16,6 +16,9 @@ character(len=5), dimension(2) :: tags = (/ '<?php', '?>   ' /)
 character(len=200) :: line
 integer :: i, len_line, line_number, io_status
 character(len=1) :: ch
+
+! Добавляем флаг для многострочного комментария
+logical :: in_comment = .false.
 
 ! Таблица имен
 type :: name_table_entry
@@ -34,6 +37,10 @@ end type lexeme_table_entry
 
 type(lexeme_table_entry), dimension(100) :: lexeme_table
 integer :: lexeme_table_size = 0
+
+! Таблицы для операторов, идентификаторов, констант и ключевых слов
+type(lexeme_table_entry), dimension(100) :: operator_table, identifier_table, constant_table, keyword_table
+integer :: operator_table_size = 0, identifier_table_size = 0, constant_table_size = 0, keyword_table_size = 0
 
 ! Счетчик токенов
 integer :: token_id = 0
@@ -55,9 +62,28 @@ do
     len_line = len_trim(line)
     i = 1
 
-    ! Анализ строки
-    do while (i <= len_line)
-        ch = line(i:i)
+! Анализ строки
+do while (i <= len_line)
+    ch = line(i:i)
+
+    ! Проверка на многострочный комментарий
+    if (in_comment) then
+        if (i < len_line .and. line(i:i+1) == '*/') then
+            in_comment = .false.
+            i = i + 2
+        else
+            i = i + 1
+        end if
+        cycle
+    end if
+
+    if (i < len_line .and. line(i:i+1) == '//') then
+        exit  
+    else if (i < len_line .and. line(i:i+1) == '/*') then
+        in_comment = .true.
+        i = i + 2
+        cycle
+    end if
 
         select case (ch)
         case ('A':'Z', 'a':'z', '$')
@@ -65,6 +91,7 @@ do
         case ('0':'9')
             call process_constant(line, i, len_line, name_table, name_table_size, line_number)
         case ('=', '+', '-', '*', '/', '(', ')', '{', '}', ';', '<', '>', '?', ',')
+
             ! Обработка тегов
             if (i < len_line .and. line(i:i+4) == '<?php') then
                 call print_token('TAG', '<?php', line_number, i, '-')
@@ -92,7 +119,20 @@ do
     end if
 end do
 
+! Проверка на незакрытый многострочный комментарий в конце файла
+if (in_comment) then
+    write(*, '(A)') 'ERROR: Unclosed multiline comment at end of file.'
+end if
+
+
 close(10)
+
+! Вывод таблиц
+call print_table('Operators', operator_table, operator_table_size)
+call print_table('Identifiers', identifier_table, identifier_table_size)
+call print_table('Constants', constant_table, constant_table_size)
+call print_table('Keywords', keyword_table, keyword_table_size)
+
 
 contains
 
@@ -103,30 +143,75 @@ subroutine print_token(token_type, lexeme, line_num, column, info)
 
     ! Проверка, есть ли лексема в таблице
     token_id_local = -1
-    do j = 1, lexeme_table_size
-        if (trim(lexeme_table(j)%lexeme) == trim(lexeme)) then
-            token_id_local = lexeme_table(j)%id
-            exit
-        end if
-    end do
+    if (token_type == 'TAG') then
+        token_id_local = 0  ! Устанавливаем фиксированный ID для тегов
+    else
+        do j = 1, lexeme_table_size
+            if (trim(lexeme_table(j)%lexeme) == trim(lexeme)) then
+                token_id_local = lexeme_table(j)%id
+                exit
+            end if
+        end do
 
-    if (token_id_local == -1) then
-        ! Если лексема новая, добавляем ее в таблицу
-        lexeme_table_size = lexeme_table_size + 1
-        lexeme_table(lexeme_table_size)%lexeme = trim(lexeme)
-        lexeme_table(lexeme_table_size)%id = lexeme_table_size
-        token_id_local = lexeme_table_size
+        if (token_id_local == -1) then
+            ! Если лексема новая, добавляем ее в таблицу
+            lexeme_table_size = lexeme_table_size + 1
+            lexeme_table(lexeme_table_size)%lexeme = trim(lexeme)
+            lexeme_table(lexeme_table_size)%id = lexeme_table_size
+            token_id_local = lexeme_table_size
+        end if
     end if
 
+    ! Заполняем соответствующую таблицу
+    select case (token_type)
+    case ('OP')
+        call add_to_table(operator_table, operator_table_size, lexeme)
+    case ('ID')
+        call add_to_table(identifier_table, identifier_table_size, lexeme)
+    case ('CONST')
+        call add_to_table(constant_table, constant_table_size, lexeme)
+    case ('KEY')
+        call add_to_table(keyword_table, keyword_table_size, lexeme)
+    end select
+
     ! Форматированный вывод с фиксированной шириной столбцов
-write(*, '(A, A12, A, A20, A, I4, A, I4, A, I4, A, A)') &
-    'Token: ', trim(token_type), &
-    '    Lexeme: ', trim(lexeme), &
-    '    Line: ', line_num, &
-    ', Column: ', column, &
-    ', ID: ', token_id_local, &
-    ', Info: ', trim(info)
+    write(*, '(A, A12, A, A20, A, I4, A, I4, A, I4, A, A)') &
+        'Token: ', trim(token_type), &
+        '    Lexeme: ', trim(lexeme), &
+        '    Line: ', line_num, &
+        ', Column: ', column, &
+        ', ID: ', token_id_local, &
+        ', Info: ', trim(info)
 end subroutine print_token
+
+subroutine add_to_table(table, table_size, lexeme)
+    type(lexeme_table_entry), dimension(:), intent(inout) :: table
+    integer, intent(inout) :: table_size
+    character(len=*), intent(in) :: lexeme
+    integer :: j
+
+    do j = 1, table_size
+        if (trim(table(j)%lexeme) == trim(lexeme)) return
+    end do
+
+    table_size = table_size + 1
+    table(table_size)%lexeme = trim(lexeme)
+    table(table_size)%id = table_size
+end subroutine add_to_table
+
+subroutine print_table(title, table, table_size)
+    character(len=*), intent(in) :: title
+    type(lexeme_table_entry), dimension(:), intent(in) :: table
+    integer, intent(in) :: table_size
+    integer :: j
+
+    write(*, '(A)') title
+    write(*, '(A, T15, A)') 'Lexeme', 'ID'
+    do j = 1, table_size
+        write(*, '(A, T15, I4)') trim(table(j)%lexeme), table(j)%id
+    end do
+    write(*, '(A)') ''
+end subroutine print_table
 
 subroutine process_identifier(line, i, len_line, name_table, name_table_size, line_number, keywords)
     character(len=200), intent(in) :: line
@@ -158,10 +243,28 @@ subroutine process_identifier(line, i, len_line, name_table, name_table_size, li
 
     identifier = trim(identifier)
 
+    ! Проверка на недопустимые идентификаторы
+    if (len_trim(identifier) > 0) then
+        ! Случай 1: Идентификатор начинается с цифры (без $)
+        if (identifier(1:1) >= '0' .and. identifier(1:1) <= '9') then
+            call print_token('ERROR', 'Invalid identifier '//identifier, line_number, i-len_trim(identifier), '-')
+            return
+
+        ! Случай 2: Идентификатор начинается с $, за которым следует цифра
+        else if (identifier(1:1) == '$' .and. len_trim(identifier) >= 2) then
+            if (identifier(2:2) >= '0' .and. identifier(2:2) <= '9') then
+                call print_token('ERROR', 'Invalid identifier '//identifier, line_number, i-len_trim(identifier), '-')
+                return
+            end if
+        end if
+    end if
+
     ! Проверка, является ли идентификатор ключевым словом
 do j = 1, size(keywords)
     if (identifier == trim(keywords(j))) then
         select case (trim(keywords(j)))
+            case ('final', 'abstract', 'public', 'private')  ! <--- Soft keywords
+               info_type = 'soft_keyword'
             case ('int')
                 info_type = 'integer'
             case ('float')
@@ -183,6 +286,7 @@ if (identifier == 'true' .or. identifier == 'false') then
     call print_token('CONST', identifier, line_number, i - len_trim(identifier), 'boolean')
     return
 end if
+
 
     ! Проверка, есть ли идентификатор в таблице
     id = -1

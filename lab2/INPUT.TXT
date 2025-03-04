@@ -1,11 +1,16 @@
 <?php
-int $a = 5;
-float $b = 3.14;
+int $a=  5;
+float $b =3.14;
 $stringVar = "Hello, PHP!";
 $flag = true;
 
-if ($a > 3) {
-    $result = $a + $b;
+// ghfhf
+/* dkdk
+,l,len,lkl,len
+o,,kk */
+
+if ($a> 3) {
+    $result = $a+$b;
     echo "Result is: "  $result;
 } else {
     $result = $a - $b;
@@ -42,5 +47,5 @@ class MyClass {
 }
 
 $myObject = new MyClass(42);
-echo "Object value: "  $myObject->getVar();
+echo "Object value: "  $myObject->getVar();  
 ?>
