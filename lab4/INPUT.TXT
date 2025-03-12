@@ -1,0 +1,6 @@
+<?php
+$a = 5;             // integer
+$b = 10;            // integer
+$c = $a * $b;       // integer
+$d = $c / 2;        // integer
+?>
