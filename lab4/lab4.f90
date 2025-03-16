@@ -107,7 +107,7 @@ CONTAINS
     END DO
   END FUNCTION GetSymbolType
 
-  ! Проверка, является ли строка числом
+  ! Проверка, является ли строка числом (целым или вещественным)
   FUNCTION IsNumber(str) RESULT(is_num)
     CHARACTER(LEN=*), INTENT(IN) :: str
     LOGICAL :: is_num
@@ -129,6 +129,31 @@ CONTAINS
       END IF
     END DO
   END FUNCTION IsNumber
+
+  ! Определение типа числа (int или float)
+  FUNCTION DetermineNumberType(str) RESULT(num_type)
+    CHARACTER(LEN=*), INTENT(IN) :: str
+    CHARACTER(LEN=10) :: num_type
+    
+    IF (INDEX(str, '.') > 0) THEN
+      num_type = "float"
+    ELSE
+      num_type = "int"
+    END IF
+  END FUNCTION DetermineNumberType
+
+  ! Проверка, является ли строка литералом
+  FUNCTION IsLiteral(var) RESULT(is_lit)
+    CHARACTER(LEN=*), INTENT(IN) :: var
+    LOGICAL :: is_lit
+    INTEGER :: len_var
+
+    len_var = LEN_TRIM(var)
+    is_lit = IsNumber(var)
+    IF (.NOT. is_lit .AND. len_var >= 2) THEN
+      is_lit = (var(1:1) == '"' .AND. var(len_var:len_var) == '"')
+    END IF
+  END FUNCTION IsLiteral
 
   ! Удаление комментариев из строки
   FUNCTION RemoveComments(line) RESULT(clean_line)
@@ -186,9 +211,11 @@ CONTAINS
       IF (quote_pos > 0) THEN
         var_type = "string"
       ELSE IF (dot_pos > 0) THEN
-        var_type = "string"  ! Если есть оператор конкатенации, тип всегда string
+        var_type = "float"  ! Если есть точка, это вещественное число
+      ELSE IF (IsNumber(expr)) THEN
+        var_type = "int"    ! Если нет точки, это целое число
       ELSE
-        var_type = "int"
+        var_type = "int"    ! По умолчанию
       END IF
 
       ! Добавляем переменную в таблицу символов
@@ -224,7 +251,7 @@ CONTAINS
     
     ! Получаем типы переменных
     IF (IsNumber(var1)) THEN
-      type1 = "int"
+      type1 = DetermineNumberType(var1)
     ELSE IF (var1(1:1) == '"' .AND. var1(LEN_TRIM(var1):LEN_TRIM(var1)) == '"') THEN
       type1 = "string"
     ELSE
@@ -232,7 +259,7 @@ CONTAINS
     END IF
     
     IF (IsNumber(var2)) THEN
-      type2 = "int"
+      type2 = DetermineNumberType(var2)
     ELSE IF (var2(1:1) == '"' .AND. var2(LEN_TRIM(var2):LEN_TRIM(var2)) == '"') THEN
       type2 = "string"
     ELSE
@@ -252,12 +279,16 @@ CONTAINS
       PRINT *, "Valid operation: ", TRIM(line)
     END IF
 
-    ! Проверка доступности переменных
-    IF (GetSymbolType(var1) == "undefined") THEN
-      CALL AddError("ERROR: Undefined variable '"//TRIM(var1)//"'")
+    ! Проверка доступности переменных (только если не литерал)
+    IF (.NOT. IsLiteral(var1)) THEN
+      IF (GetSymbolType(var1) == "undefined") THEN
+        CALL AddError("ERROR: Undefined variable '"//TRIM(var1)//"'")
+      END IF
     END IF
-    IF (GetSymbolType(var2) == "undefined") THEN
-      CALL AddError("ERROR: Undefined variable '"//TRIM(var2)//"'")
+    IF (.NOT. IsLiteral(var2)) THEN
+      IF (GetSymbolType(var2) == "undefined") THEN
+        CALL AddError("ERROR: Undefined variable '"//TRIM(var2)//"'")
+      END IF
     END IF
   END SUBROUTINE ProcessExpression
 
@@ -321,6 +352,59 @@ CONTAINS
       END IF
     END IF
   END SUBROUTINE ProcessFunctionDeclaration
+
+    SUBROUTINE ProcessEchoStatement(line)
+    CHARACTER(LEN=*), INTENT(IN) :: line
+    CHARACTER(LEN=256) :: expr_part
+    INTEGER :: echo_pos, end_pos
+
+    PRINT *, "Processing echo statement: [", TRIM(line), "]"
+    echo_pos = INDEX(line, "echo")
+    IF (echo_pos == 0) RETURN
+
+    ! Извлекаем выражение после echo
+    expr_part = line(echo_pos + 4:)
+    expr_part = ADJUSTL(expr_part)
+
+    ! Удаляем точку с запятой и пробелы в конце
+    end_pos = LEN_TRIM(expr_part)
+    DO WHILE (end_pos > 0 .AND. (expr_part(end_pos:end_pos) == ';' .OR. expr_part(end_pos:end_pos) == ' '))
+      end_pos = end_pos - 1
+    END DO
+    expr_part = expr_part(1:end_pos)
+
+    ! Проверяем переменные в выражении
+    CALL CheckExpressionVariables(TRIM(expr_part))
+  END SUBROUTINE ProcessEchoStatement
+
+   ! Рекурсивная проверка переменных в выражении
+  RECURSIVE SUBROUTINE CheckExpressionVariables(expr)
+    CHARACTER(LEN=*), INTENT(IN) :: expr
+    CHARACTER(LEN=32) :: var1, var2
+    INTEGER :: op_pos
+
+    IF (LEN_TRIM(expr) == 0) RETURN
+
+    ! Если это литерал (число или строка), пропускаем проверку
+    IF (IsLiteral(expr)) THEN
+      RETURN
+    END IF
+
+    ! Ищем операторы
+    op_pos = SCAN(expr, "+-*/.")
+    IF (op_pos > 0) THEN
+      ! Разделяем выражение на левую и правую части
+      var1 = CleanVarName(expr(1:op_pos-1))
+      var2 = CleanVarName(expr(op_pos+1:))
+      CALL CheckExpressionVariables(var1)
+      CALL CheckExpressionVariables(var2)
+    ELSE
+      ! Если это переменная, проверяем её наличие в таблице символов
+      IF (GetSymbolType(expr) == "undefined") THEN
+        CALL AddError("Error: Undefined variable '"//TRIM(expr)//"' in echo statement")
+      END IF
+    END IF
+  END SUBROUTINE CheckExpressionVariables
 
   ! Обработка объявления класса
   SUBROUTINE ProcessClassDeclaration(line)
@@ -483,6 +567,7 @@ CONTAINS
     END DO
   END FUNCTION GetFunctionIndex
 
+  ! Обработка блока кода
   SUBROUTINE ProcessCodeBlock(lines, num_lines)
     CHARACTER(LEN=256), DIMENSION(:), INTENT(IN) :: lines
     INTEGER, INTENT(IN) :: num_lines
@@ -552,12 +637,6 @@ CONTAINS
       RETURN
     END IF
 
-    ! Игнорируем echo
-    IF (INDEX(clean_line, "echo") > 0) THEN
-      PRINT *, "Ignoring echo statement: [", TRIM(clean_line), "]"
-      RETURN
-    END IF
-
     ! Проверка синтаксиса
     IF (.NOT. CheckSyntax(clean_line)) THEN
       PRINT *, "Syntax error detected. Skipping line."
@@ -571,6 +650,8 @@ CONTAINS
     ELSE IF (INDEX(clean_line, "function") > 0) THEN
       CALL ProcessFunctionDeclaration(clean_line)
       inside_function = .TRUE.
+    ELSE IF (INDEX(clean_line, "echo") > 0) THEN
+      CALL ProcessEchoStatement(clean_line)
     ELSE IF (INDEX(clean_line, "(") > 0 .AND. INDEX(clean_line, ")") > 0) THEN
       CALL ProcessFunctionCall(clean_line)
     ELSE IF (INDEX(clean_line, "=") > 0) THEN

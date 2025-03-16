@@ -1,38 +1,38 @@
 <?php
-// Correct function declaration with parameters
 function calculateSum($num1, $num2) {
-    // Local variables inside the function
     $result = $num1 + $num2;
     return $result;
 }
 
-class MyClass {}
-
-// Global variables
-$y = 20;
-
-function foo() {
-    $xW = 10;
+function foo(int $x) {
+    $x = $c + 1 ;
 }
-$xW ; 
 
-// Valid function call with declared variables
-$sum = calculateSum($x, $y);
+$x =  1.1 ;
+echo $x;
 
-// String concatenation with valid types
+function foo(int $x) {}
+
+$y = 20 + "hello";
+
+$sum = calculateSum($x, $y, $Z);
+
 $greeting = "Hello, ";
 $subject = "world!";
 $message = $greeting . $subject;
 
-// Correct arithmetic operation with explicit types
-$a = 5;
-$b = 3;
+$a = 5.4;
+$b = 33.3;
 $product = $a * $b;
 
 // Block with local scope
 {
     $localVar = 100;
-    $x = $localVar; // Valid (reassigns global $x inside block)
+    $t = $localVar; 
+        {
+        $localVar1 = 100;
+        $t1 = $localVar1; 
+        }
 }
 
 // Valid output (optional)
