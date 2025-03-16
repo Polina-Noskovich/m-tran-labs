@@ -1,6 +1,40 @@
 <?php
-$a = 5;             // integer
-$b = 10;            // integer
-$c = $a * $b;       // integer
-$d = $c / 2;        // integer
+// Correct function declaration with parameters
+function calculateSum($num1, $num2) {
+    // Local variables inside the function
+    $result = $num1 + $num2;
+    return $result;
+}
+
+class MyClass {}
+
+// Global variables
+$y = 20;
+
+function foo() {
+    $xW = 10;
+}
+$xW ; 
+
+// Valid function call with declared variables
+$sum = calculateSum($x, $y);
+
+// String concatenation with valid types
+$greeting = "Hello, ";
+$subject = "world!";
+$message = $greeting . $subject;
+
+// Correct arithmetic operation with explicit types
+$a = 5;
+$b = 3;
+$product = $a * $b;
+
+// Block with local scope
+{
+    $localVar = 100;
+    $x = $localVar; // Valid (reassigns global $x inside block)
+}
+
+// Valid output (optional)
+echo $message . " Sum: " . $sum . ", Product: " . $product;
 ?>
