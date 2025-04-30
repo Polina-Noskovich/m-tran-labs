@@ -1,0 +1,46 @@
+<?php
+
+$name = "Ivan_Ivanov";
+$age = 30;
+$height = 1.85;
+$array = [5, 10, 15, 25]; // сумма = 55
+$value = 7;
+
+echo "Name:_ $name";
+echo "Age:_ $age";
+echo "Height:_ $height";
+
+$sum = array_sum($array);
+echo "Sum_of_array_elements:_ $sum";
+
+// Проверка диапазона
+if ($value >= 6 && $value <= 10) {
+    echo "Value_is_in_the_range_6-10";
+}
+
+$i = 1;
+
+// Простой DO loop (эмулируется через for в PHP)
+for ($i = 1; $i <= 5; $i++) {
+    echo "DO_loop_iteration:_ $i";
+}
+
+// DO WHILE loop
+$i = 1;
+do {
+    echo "DO_WHILE_loop_iteration:_ $i";
+    $i++;
+} while ($i <= 3);
+
+// Цикл с EXIT и CYCLE (используем break и continue)
+for ($i = 1; $i <= 10; $i++) {
+    if ($i == 8) {
+        break; // EXIT
+    }
+    if ($i < 8) {
+        continue; // CYCLE
+    }
+    echo "Iteration_with_EXIT_and_CYCLE:_ $i";
+}
+
+?>

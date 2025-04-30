@@ -3,13 +3,13 @@ MODULE SymbolTable
   INTEGER, PARAMETER :: max_symbols = 1000
   INTEGER, PARAMETER :: max_functions = 50
   INTEGER, PARAMETER :: max_scope_depth = 10
-  INTEGER, PARAMETER :: max_errors = 100  ! Максимальное количество ошибок
+  INTEGER, PARAMETER :: max_errors = 100  
 
   TYPE Symbol
     CHARACTER(LEN=32) :: name
-    CHARACTER(LEN=10) :: type  ! 'int', 'float', 'string', 'void'
-    CHARACTER(LEN=10) :: scope ! 'global', 'local'
-    INTEGER :: scope_level     ! Уровень вложенности области видимости
+    CHARACTER(LEN=10) :: type 
+    CHARACTER(LEN=10) :: scope
+    INTEGER :: scope_level    
   END TYPE Symbol
 
   TYPE Function
